@@ -11,12 +11,15 @@ import {
 import { HeartIcon as HeartFilledIcon } from "@heroicons/react/solid";
 import { useSession } from "next-auth/react";
 import {
-    addDoc,
+  addDoc,
   collection,
+  deleteDoc,
+  doc,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import Moment from "react-moment";
@@ -25,6 +28,8 @@ function Post(props) {
   const { data: session } = useSession();
   const [comments, setComments] = useState([]);
   const [comment, setComment] = useState("");
+  const [likes, setLikes] = useState([]);
+  const [hasLiked, setHasLiked] = useState(false);
 
   useEffect(
     () =>
@@ -37,8 +42,35 @@ function Post(props) {
           setComments(snapshot.docs);
         }
       ),
-    [db]
+    [db, props.id]
   );
+
+  useEffect(
+    () =>
+      onSnapshot(
+        query(collection(db, "posts", props.id, "likes")),
+        (snapshot) => {
+          setLikes(snapshot.docs);
+        }
+      ),
+    [db, props.id]
+  );
+
+  useEffect(() => {
+    setHasLiked(
+      likes.findIndex((like) => like.id === session?.user?.uid) !== -1
+    );
+  }, [likes]);
+
+  const likePost = async (e) => {
+    if (hasLiked) {
+      await deleteDoc(doc(db, "posts", props.id, "likes", session.user.uid));
+    } else {
+      await setDoc(doc(db, "posts", props.id, "likes", session.user.uid), {
+        username: session.user.username,
+      });
+    }
+  };
 
   const sendComment = async (e) => {
     e.preventDefault();
@@ -53,8 +85,6 @@ function Post(props) {
       timestamp: serverTimestamp(),
     });
   };
-
- console.log(comments);
 
   return (
     <div className="bg-white my-7 border rounded-sm">
@@ -73,7 +103,14 @@ function Post(props) {
       {session && (
         <div className="flex justify-between px-4 pt-4">
           <div className="flex space-x-4">
-            <HeartIcon className="btn" />
+            {hasLiked ? (
+              <HeartFilledIcon
+                onClick={likePost}
+                className="btn text-red-500"
+              />
+            ) : (
+              <HeartIcon onClick={likePost} className="btn" />
+            )}
             <ChatIcon className="btn" />
             <PaperAirplaneIcon className="btn" />
           </div>
@@ -81,12 +118,15 @@ function Post(props) {
         </div>
       )}
       <p className="p-5 truncate">
+        {likes.length > 0 && (
+          <p className="font-bold mb-1">{likes.length} likes</p>
+        )}
         <span className="font-bold mr-1">{props.username}</span> {props.caption}
       </p>
 
       {comments.length > 0 && (
         <div className="ml-10 h-20 overflow-y-scroll scrollbar-thumb-black scrollbar-thin">
-          {comments.map(comment => (
+          {comments.map((comment) => (
             <div className="flex items-center space-x-2 mb-3" key={comment.id}>
               <img
                 className="h-7 rounded-full"
@@ -119,7 +159,7 @@ function Post(props) {
           <button
             type="submit"
             onClick={sendComment}
-            disabled={!(comment.trim())}
+            disabled={!comment.trim()}
             className="font-semibold text-blue-400"
           >
             Post
