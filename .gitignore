@@ -11,8 +11,7 @@
 # next.js
 /.next/
 /out/
-#firebase
-firebase.js
+
 # production
 /build
 
